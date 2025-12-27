@@ -1,29 +1,24 @@
 package com.pskwiercz.app.controller;
 
+import com.pskwiercz.app.dto.ChatMessageDto;
+import com.pskwiercz.app.services.chat.IConversationService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
+@Slf4j
 @RestController
 @RequestMapping("${api.prefix}/chat")
 @RequiredArgsConstructor
 public class ChatController {
 
-    private final ChatClient chatClient;
-    private final String SYSTEM_PROMPT = """
-            You are a helpful agent. Your goal is to listen to the user question
-             and provide a response
-            """;
+    private final IConversationService conversationService;
 
-    @GetMapping
-    public String chat(@RequestParam String msg) {
-        return chatClient.prompt()
-                .system(SYSTEM_PROMPT)
-                .user(msg)
-                .call()
-                .content();
+    @PostMapping
+    public ResponseEntity<String> handleChatMessage(@RequestBody ChatMessageDto msg) {
+        String response = conversationService.handleChatMessage(msg);
+        log.info("Controller response: {} ", response);
+        return ResponseEntity.ok(response);
     }
 }
