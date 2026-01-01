@@ -15,7 +15,8 @@ import reactor.core.scheduler.Schedulers;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.pskwiercz.app.util.PromptTemplates.SYSTEM_PROMPT;
+import static com.pskwiercz.app.util.PromptTemplates.SUPPORT_PROMPT_TEMPLATE;
+import static com.pskwiercz.app.util.PromptTemplates.USER_CONFIRMATION_PROMPT_TEMPLATE;
 
 @Slf4j
 @Service
@@ -26,8 +27,7 @@ public class AISupportService {
 
     public Mono<String> chatWithHistory(List<ChatEntry> history) {
         List<Message> messages = new ArrayList<>();
-
-        messages.add(new SystemMessage(SYSTEM_PROMPT));
+        messages.add(new SystemMessage(SUPPORT_PROMPT_TEMPLATE));
 
         for (ChatEntry chatEntry : history) {
             switch (chatEntry.role()) {
@@ -44,8 +44,7 @@ public class AISupportService {
         }
 
         return Mono.fromCallable(() -> {
-            String content = chatClient
-                    .prompt()
+            String content = chatClient.prompt()
                     .messages(messages)
                     .call()
                     .content();
@@ -55,4 +54,22 @@ public class AISupportService {
             return content;
         }).subscribeOn(Schedulers.boundedElastic());
     }
+
+    public Mono<String> generateUserConfirmationMessage() {
+        String prompt = String.format(USER_CONFIRMATION_PROMPT_TEMPLATE);
+        List<Message> messages = new ArrayList<>();
+        messages.add(new SystemMessage(prompt));
+
+        return Mono.fromCallable(() -> {
+            String content = chatClient.prompt()
+                    .messages(messages)
+                    .call()
+                    .content();
+            if (content == null) {
+                throw new IllegalStateException("Content is null");
+            }
+            return content;
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
 }

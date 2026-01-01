@@ -14,7 +14,7 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String fullName;
-    private String email;
+    private String emailAddress;
     private String phoneNumber;
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<Conversation> conversation;
