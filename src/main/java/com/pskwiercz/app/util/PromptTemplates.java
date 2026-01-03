@@ -92,7 +92,7 @@ public class PromptTemplates {
             "Thanks for waiting! We've sent you an email with the details of your ticket to further process your request.
             Please check your inbox, spam, junk email in case you can't see it in your inbox. Have a nice day!"
             
-            Now generate a message to inform the user.
+            Now generate a message to inform the customer.
             """;
 
 }

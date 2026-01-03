@@ -2,17 +2,20 @@ package com.pskwiercz.app.services.chat;
 
 import com.pskwiercz.app.dto.ChatEntryDTO;
 import com.pskwiercz.app.dto.ChatMessageDTO;
-import com.pskwiercz.app.helper.UserInfo;
-import com.pskwiercz.app.helper.UserInfoHelper;
+import com.pskwiercz.app.event.TicketCreationEvent;
+import com.pskwiercz.app.helper.CustomerInfo;
+import com.pskwiercz.app.helper.CustomerInfoHelper;
 import com.pskwiercz.app.model.Conversation;
+import com.pskwiercz.app.model.Customer;
 import com.pskwiercz.app.model.Ticket;
-import com.pskwiercz.app.model.User;
 import com.pskwiercz.app.repository.ConversationRepository;
+import com.pskwiercz.app.repository.TicketRepository;
 import com.pskwiercz.app.repository.UserRepository;
 import com.pskwiercz.app.services.ticket.ITicketService;
 import com.pskwiercz.app.websocket.WebSocketMessageSender;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -33,7 +36,9 @@ public class ConversationService implements IConversationService {
     private final ITicketService iTicketService;
     private final UserRepository userRepository;
     private final ConversationRepository conversationRepository;
+    private final TicketRepository ticketRepository;
     private final WebSocketMessageSender webSocketMessageSender;
+    private final ApplicationEventPublisher publisher;
 
     private final Map<String, List<ChatEntryDTO>> activeConversations = new ConcurrentHashMap<>();
 
@@ -69,12 +74,14 @@ public class ConversationService implements IConversationService {
                             history.add(new ChatEntryDTO("system", "The email notification has been sent."));
                             // Ask the AI to generate th email message and send to the customer
                             String feedbackMessage = aiSupportService.generateEmailNotificationMessage().block();
+                            log.info("Here is the email feedback message: {}", feedbackMessage);
 
                             if (feedbackMessage != null) {
                                 List<ChatEntryDTO> currentHistory = activeConversations.get(sessionId);
                                 if (currentHistory != null) {
                                     currentHistory.add(new ChatEntryDTO("assistant", feedbackMessage));
                                 }
+                                log.info("Sending WebSocket Message to user: {}", feedbackMessage);
                                 webSocketMessageSender.sendMessageToUser(sessionId, feedbackMessage);
                             }
 
@@ -96,10 +103,10 @@ public class ConversationService implements IConversationService {
 
     private Ticket finalizeConversationAndCreateTicket(String sessionId) {
         List<ChatEntryDTO> history = activeConversations.get(sessionId);
-        User user = getCustomerInformation(history);
-        log.info("This is the user information : {}", user);
+        Customer customer = getCustomerInformation(history);
+        log.info("This is the user information : {}", customer);
 
-        if (user == null) {
+        if (customer == null) {
             // Send the message to the user via Websocket
             webSocketMessageSender.sendMessageToUser(sessionId, USER_INFORMATION_ERROR_PROMPT_TEMPLATE);
             if (history != null) {
@@ -108,7 +115,7 @@ public class ConversationService implements IConversationService {
             return null;
         }
 
-        Conversation conversation = getConversation(user);
+        Conversation conversation = getConversation(customer);
         try {
             List<ChatEntryDTO> userConversation = history
                     .stream()
@@ -125,13 +132,22 @@ public class ConversationService implements IConversationService {
             Conversation savedConversation = conversationRepository.save(conversation);
 
             //Create and save the ticket for the conversation
-            Ticket savedTicket = iTicketService.createTicketForConversation(conversation);
+            Ticket ticket = iTicketService.createTicketForConversation(conversation);
+            CustomerInfo customerInfo = getCustomerInfo(history);
+            if (customerInfo.orderNumber() != null) {
+                ticket.setProductOrderNumber(customerInfo.orderNumber());
+            } else {
+                ticket.setProductOrderNumber(null);
+            }
+            Ticket savedTicket = ticketRepository.save(ticket);
 
             savedConversation.setTicket(savedTicket);
             savedConversation.setTicketCreated(true);
             conversationRepository.save(savedConversation);
 
             //Send notification email to the customer
+            publisher.publishEvent(new TicketCreationEvent(savedTicket));
+
             //Remove the customer conversation from the memory
             activeConversations.remove(sessionId);
             return savedTicket;
@@ -144,17 +160,21 @@ public class ConversationService implements IConversationService {
 
     }
 
-    private User getCustomerInformation(List<ChatEntryDTO> history) {
-        UserInfo userInfo = UserInfoHelper.extractUserInformationFromChatHistory(history);
-        log.info("Here is the customer information : {}", userInfo);
+    private Customer getCustomerInformation(List<ChatEntryDTO> history) {
+        CustomerInfo customerInfo = CustomerInfoHelper.extractUserInformationFromChatHistory(history);
+        log.info("Here is the customer information : {}", customerInfo);
         return userRepository.findByEmailAddressAndPhoneNumber(
-                userInfo.emailAddress(), userInfo.phoneNumber());
+                customerInfo.emailAddress(), customerInfo.phoneNumber());
     }
 
-    private static Conversation getConversation(User user) {
+    private static Conversation getConversation(Customer customer) {
         Conversation conversation = new Conversation();
-        conversation.setUser(user);
+        conversation.setCustomer(customer);
         conversation.setTicketCreated(false);
         return conversation;
+    }
+
+    private static CustomerInfo getCustomerInfo(List<ChatEntryDTO> history) {
+        return CustomerInfoHelper.extractUserInformationFromChatHistory(history);
     }
 }

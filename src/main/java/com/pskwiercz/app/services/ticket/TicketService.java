@@ -30,9 +30,8 @@ public class TicketService implements ITicketService {
         ticket.setResolvedAt(null);
         ticket.setCreatedAt(LocalDateTime.now());
         ticket.setReferenceNumber(generateRandomAlphanumeric());
-        return ticketRepository.save(ticket);
+        return ticket;
     }
-
 
     @Override
     public TicketDTO getTicketById(Long ticketId) {
