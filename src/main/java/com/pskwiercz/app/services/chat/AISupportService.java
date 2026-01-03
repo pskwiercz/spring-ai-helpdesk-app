@@ -1,6 +1,6 @@
 package com.pskwiercz.app.services.chat;
 
-import com.pskwiercz.app.dto.ChatEntry;
+import com.pskwiercz.app.dto.ChatEntryDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -15,8 +15,7 @@ import reactor.core.scheduler.Schedulers;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.pskwiercz.app.util.PromptTemplates.SUPPORT_PROMPT_TEMPLATE;
-import static com.pskwiercz.app.util.PromptTemplates.USER_CONFIRMATION_PROMPT_TEMPLATE;
+import static com.pskwiercz.app.util.PromptTemplates.*;
 
 @Slf4j
 @Service
@@ -25,20 +24,23 @@ public class AISupportService {
 
     private final ChatClient chatClient;
 
-    public Mono<String> chatWithHistory(List<ChatEntry> history) {
+    public Mono<String> chatWithHistory(List<ChatEntryDTO> history) {
         List<Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(SUPPORT_PROMPT_TEMPLATE));
 
-        for (ChatEntry chatEntry : history) {
-            switch (chatEntry.role()) {
+        for (ChatEntryDTO chatEntryDTO : history) {
+            switch (chatEntryDTO.role()) {
                 case "user":
-                    messages.add(new UserMessage(chatEntry.content()));
+                    messages.add(new UserMessage(chatEntryDTO.content()));
                     break;
                 case "assistant":
-                    messages.add(new AssistantMessage(chatEntry.content()));
+                    messages.add(new AssistantMessage(chatEntryDTO.content()));
+                    break;
+                case "system":
+                    messages.add(new SystemMessage(chatEntryDTO.content()));
                     break;
                 default: {
-                    log.info("Role isn't supported: {}", chatEntry.role());
+                    log.info("Role isn't supported: {}", chatEntryDTO.role());
                 }
             }
         }
@@ -66,7 +68,54 @@ public class AISupportService {
                     .call()
                     .content();
             if (content == null) {
-                throw new IllegalStateException("Content is null");
+                throw new IllegalStateException("AI response content is null");
+            }
+            return content;
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public Mono<String> summarizeUserConversation(String userConversationText) {
+        List<Message> messages = new ArrayList<>();
+        messages.add(new SystemMessage(CUSTOMER_CONVERSATION_SUMMARY_PROMPT));
+        messages.add(new UserMessage(userConversationText));
+        return Mono.fromCallable(() -> {
+            ChatClient.CallResponseSpec responseSpec = chatClient.prompt()
+                    .messages(messages)
+                    .call();
+            String content = responseSpec.content();
+            if (content == null) {
+                throw new IllegalStateException("AI response content is null");
+            }
+            return content.trim();
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public Mono<String> generateConversationTitle(String summarizedConversation) {
+        List<Message> messages = new ArrayList<>();
+        messages.add(new SystemMessage(TITLE_GENERATION_PROMPT));
+        messages.add(new SystemMessage(summarizedConversation));
+        return Mono.fromCallable(() -> {
+            ChatClient.CallResponseSpec responseSpec = chatClient.prompt()
+                    .messages(messages)
+                    .call();
+            String content = responseSpec.content();
+            if (content == null) {
+                throw new IllegalStateException("AI response content is null");
+            }
+            return content.trim();
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public Mono<String> generateEmailNotificationMessage() {
+        List<Message> messages = new ArrayList<>();
+        messages.add(new SystemMessage(EMAIL_NOTIFICATION_PROMPT));
+        return Mono.fromCallable(() -> {
+            ChatClient.CallResponseSpec responseSpec = chatClient.prompt()
+                    .messages(messages)
+                    .call();
+            String content = responseSpec.content();
+            if (content == null) {
+                throw new IllegalStateException("AI response content is null");
             }
             return content;
         }).subscribeOn(Schedulers.boundedElastic());

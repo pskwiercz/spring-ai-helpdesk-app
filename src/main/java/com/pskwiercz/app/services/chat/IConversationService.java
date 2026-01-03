@@ -1,9 +1,9 @@
 package com.pskwiercz.app.services.chat;
 
-import com.pskwiercz.app.dto.ChatMessageDto;
+import com.pskwiercz.app.dto.ChatMessageDTO;
 
 public interface IConversationService {
 
-    String handleChatMessage(ChatMessageDto msg);
+    String handleChatMessage(ChatMessageDTO msg);
 
 }

@@ -1,6 +1,6 @@
 package com.pskwiercz.app.helper;
 
-import com.pskwiercz.app.dto.ChatEntry;
+import com.pskwiercz.app.dto.ChatEntryDTO;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -13,14 +13,14 @@ import java.util.regex.Matcher;
 @Getter
 @Setter
 public class UserInfoHelper {
-    public static UserInfo extractUserInformationFromChatHistory(List<ChatEntry> history) {
+    public static UserInfo extractUserInformationFromChatHistory(List<ChatEntryDTO> history) {
         if (history == null || history.isEmpty()) {
             return new UserInfo(null, null);
         }
 
         Optional<String> emailAddress = history.stream()
                 .filter(entry -> "user".equalsIgnoreCase(entry.role()))
-                .map(ChatEntry::content)
+                .map(ChatEntryDTO::content)
                 .filter(content -> content != null && !content.isBlank())
                 .map(UserInfoHelper::extractEmailAddress)
                 .filter(Optional::isPresent)
@@ -30,7 +30,7 @@ public class UserInfoHelper {
 
         Optional<String> phoneNumber = history.stream()
                 .filter(entry -> "user".equalsIgnoreCase(entry.role()))
-                .map(ChatEntry::content)
+                .map(ChatEntryDTO::content)
                 .filter(content -> content != null && !content.isBlank())
                 .map(UserInfoHelper::extractPhoneNumber)
                 .filter(Optional::isPresent)
@@ -51,8 +51,8 @@ public class UserInfoHelper {
                 });
     }
 
-    private static Optional<String> extractPhoneNumber(String emailText) {
-        return Optional.ofNullable(emailText)
+    private static Optional<String> extractPhoneNumber(String phoneText) {
+        return Optional.ofNullable(phoneText)
                 .filter(s -> !s.isEmpty())
                 .flatMap(t -> {
                     Matcher matcher = RegPattern.PHONE_PATTERN.matcher(t);
